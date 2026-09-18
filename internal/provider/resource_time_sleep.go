@@ -209,6 +209,7 @@ func (t *timeSleepResource) Create(ctx context.Context, req resource.CreateReque
 	state := timeSleepModelV0{
 		CreateDuration:  plan.CreateDuration,
 		DestroyDuration: plan.DestroyDuration,
+		ReadDuration:    plan.ReadDuration,
 		Triggers:        plan.Triggers,
 		ID:              timetypes.NewRFC3339TimeValue(t.clock.Now().UTC()),
 	}
