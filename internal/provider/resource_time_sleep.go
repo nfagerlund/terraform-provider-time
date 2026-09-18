@@ -140,6 +140,7 @@ func (t *timeSleepResource) ImportState(ctx context.Context, req resource.Import
 	state := timeSleepModelV0{
 		CreateDuration:  types.StringNull(),
 		DestroyDuration: types.StringNull(),
+		ReadDuration:    types.StringNull(),
 		ID:              timetypes.NewRFC3339TimeValue(t.clock.Now().UTC()),
 	}
 
