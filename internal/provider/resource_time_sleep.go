@@ -84,7 +84,18 @@ func (t *timeSleepResource) Schema(ctx context.Context, req resource.SchemaReque
 			"destroy_duration": schema.StringAttribute{
 				Description: "[Time duration](https://golang.org/pkg/time/#ParseDuration) to delay resource destroy. " +
 					"For example, `30s` for 30 seconds or `5m` for 5 minutes. Updating this value by itself will not trigger a delay. " +
-					"This value or any updates to it must be successfully applied into the Terraform state before destroying this resource to take effect.",
+					"This value or any updates to it must be successfully applied into the Terraform state before reading this resource to take effect.",
+				Optional: true,
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(path.MatchRoot("create_duration")),
+					stringvalidator.RegexMatches(regexp.MustCompile(`^[0-9]+(\.[0-9]+)?(ms|s|m|h)$`),
+						"must be a number immediately followed by ms (milliseconds), s (seconds), m (minutes), or h (hours). For example, \"30s\" for 30 seconds."),
+				},
+			},
+			"read_duration": schema.StringAttribute{
+				Description: "[Time duration](https://golang.org/pkg/time/#ParseDuration) to delay resource read. " +
+					"For example, `30s` for 30 seconds or `5m` for 5 minutes. Updating this value by itself will not trigger a delay. " +
+					"This value or any updates to it must be successfully applied into the Terraform state before reading this resource to take effect. In short, you can only get a delay on the second (or later) plan.",
 				Optional: true,
 				Validators: []validator.String{
 					stringvalidator.AtLeastOneOf(path.MatchRoot("create_duration")),
@@ -206,6 +217,32 @@ func (t *timeSleepResource) Create(ctx context.Context, req resource.CreateReque
 }
 
 func (t *timeSleepResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state timeSleepModelV0
+
+	// Read Terraform state data into the model
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+
+	if state.ReadDuration.ValueString() != "" {
+		duration, err := time.ParseDuration(state.ReadDuration.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Read time sleep error",
+				"The create_duration cannot be parsed\n\n+"+
+					fmt.Sprintf("Original Error: %s", err),
+			)
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			resp.Diagnostics.AddError(
+				"Read time sleep error",
+				fmt.Sprintf("Original Error: %s", ctx.Err()),
+			)
+			return
+		case <-time.After(duration):
+		}
+	}
 
 }
 
@@ -254,6 +291,7 @@ func (t *timeSleepResource) Delete(ctx context.Context, req resource.DeleteReque
 type timeSleepModelV0 struct {
 	CreateDuration  types.String      `tfsdk:"create_duration"`
 	DestroyDuration types.String      `tfsdk:"destroy_duration"`
+	ReadDuration    types.String      `tfsdk:"read_duration"`
 	Triggers        types.Map         `tfsdk:"triggers"`
 	ID              timetypes.RFC3339 `tfsdk:"id"`
 }
